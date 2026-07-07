@@ -243,7 +243,11 @@ spring:
     Toss 장 운영 캘린더 API로 공휴일까지 인지
   - 정상 상태에서는 폴링 틱마다 MySQL 쿼리가 발생하지 않도록
     관심종목 코드/전일종가/장운영여부를 각각 인메모리 캐싱
-    (`WatchlistedStockCodeCache`/`PreviousCloseCache`/`MarketCalendarCache`)
+    (`WatchlistedStockCodeCache`: 30초 TTL, `PreviousCloseCache`/
+    `MarketCalendarCache`: 캘린더 날짜 기준, 값이 바뀔 때만 재조회)
+  - 실서버 검증: 93초 동안 관심종목/전일종가 쿼리가 6회만 발생
+    (틱마다 조회했다면 약 31회) - STOMP 클라이언트로 `/topic/price/{code}`
+    구독해 3초 간격 브로드캐스트 수신도 직접 확인
 - [x] Redis 시세 캐싱 (`PriceCacheStore`) - 브로드캐스트 스냅샷을
   적재하고, 기존 현재가 조회 API도 이를 먼저 조회하는 read-through로 재사용
 
@@ -396,6 +400,8 @@ com.quantlab/{feature}/
 - Python 엔진 장애 시 Spring에서 fallback 처리 필수 (이전 캐시 스코어 반환)
 - OHLCV 수집 배치는 장 마감(15:30) 이후에만 실행
 - 토스증권 API Rate Limit은 **초당 토큰 버킷** 방식 (일일 쿼터 없음, `X-RateLimit-Limit`은 초당 burst capacity, 매초 토큰 리필). `MARKET_DATA_CHART` 그룹 초당 한도(스펙 예시 10건) 기준 150ms 딜레이 유지. 429 시 `RATE_LIMIT_EXCEEDED`로 감지해 수 초 백오프 후 재시도(`X-RateLimit-Reset`/`Retry-After` 헤더 참고)
+- `*Repository extends JpaRepository<...>, *QueryRepository`(QueryDSL 커스텀 조합) 패턴에서, 커스텀 `*QueryRepositoryImpl`은 `@Repository`가 붙어 있어 JPA가 자동 구성하는 리포지토리 프록시와 별개로 그 자체로도 스프링 빈이 된다. 따라서 다른 클래스에서 주입받을 땐 반드시 조합된 구체 타입(`ScoreRepository`, `DailyPriceRepository` 등)을 쓸 것 - `*QueryRepository` 인터페이스를 직접 주입하면 "빈 2개 발견" 에러가 난다
+- `TestContainerSupport`는 MySQL만 Testcontainers로 격리하고 **Redis는 격리하지 않는다**(로컬 실제 Redis를 그대로 씀). Redis를 읽는 서비스(예: 현재가 조회의 read-through 캐시)를 다루는 통합 테스트는 관련 캐시/스토어 클래스를 `@MockBean`으로 격리할 것 - 그렇지 않으면 로컬에서 `bootRun`으로 남긴 캐시 값이 테스트 결과에 섞여 간헐적으로 실패한다
 
 ---
 
