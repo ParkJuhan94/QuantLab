@@ -221,11 +221,33 @@ spring:
 - [x] 토스증권 API 연동 모듈 (토큰 발급 + 시세/캔들 조회)
 - [x] 종목 마스터 적재 (KRX CSV + ApplicationRunner 자동 적재)
 - [x] 일별 OHLCV 수집 Scheduler (매일 16:00 MON-FRI)
+  - 최신 캔들의 거래일이 오늘 날짜와 정확히 일치해야만 저장하는 필터가
+    있었는데, 장 마감 직후~자정 사이가 아니면 토스의 "최신" 캔들은
+    전날 날짜라 항상 걸러졌음(예외 없이 조용히 no-op, 성공으로 카운트) -
+    캔들 자체의 timestamp에서 거래일을 추출해 그 날짜로 저장하도록 수정
+  - 토스 429(Rate Limit) 발생 시 `RATE_LIMIT_EXCEEDED`로 구분해 3초
+    백오프 후 해당 종목만 1회 재시도(배치 전체는 계속 진행). 종목간
+    딜레이는 60ms→150ms로 조정(`MARKET_DATA_CHART` 그룹 스펙 예시
+    초당 10건 기준)
+  - 로컬 brew Redis가 6379를 선점해 docker-compose 컨테이너 대신 그쪽에
+    연결되는 문제 - Redis 포트를 6381로 변경(MySQL 3306 충돌 때와 동일 패턴)
+- [x] 종목별 이력 OHLCV 백필 (관심종목 등록 시 자동 트리거)
+  - 기존 배치는 "오늘 1건"만 누적해 스코어링에 필요한 200거래일
+    이력이 없었음 - 새 인프라 없이 기존 `TossApiClient.getDailyCandles`의
+    count/before 커서 페이지네이션을 그대로 재사용해 해결
+  - 목표 200일을 살짝 밑도는 상태에서 페이지 하나를 통째로 더 받아
+    실제로는 종목당 최대 400건까지 저장될 수 있음(루프 종료 조건이
+    페이지 처리 "전"에만 검사되기 때문) - 정확히 자르기보다 단순함을
+    택한 의도적 트레이드오프(장기 지표 계산엔 여유분이 오히려 유리)
 
 ### ✅ Phase 2 — 도메인 API (완료)
 - [x] 소셜 로그인(구글/카카오/네이버) + JWT 인증 (Access/Refresh, Redis 저장)
 - [x] 종목 검색 API
 - [x] 관심 종목 CRUD (사용자별 스코핑)
+  - 최초 계획은 "단일 사용자, 인증 없음" 전제였는데, 인증 도입을
+    Part B(관심 종목) 착수 전에 계획 문서에 먼저 반영 - Watchlist
+    유니크 제약을 (user_id, stock_id) 복합으로, 리포지토리/서비스/
+    컨트롤러 시그니처 전부에 userId를 반영한 뒤 구현 시작
 - [x] 현재가 / 차트 API
 
 ### ✅ Phase 3 — Python 퀀트 엔진 (완료)
@@ -234,6 +256,18 @@ spring:
 - [x] Spring 연동 (Spring -> POST /calculate/score/batch 호출, 점수 영속화, 조회 API)
   - 관심 종목 등록 즉시 + 매일 16:00 배치로 재계산, `score` 테이블에 일별 이력 누적
   - Python 엔진 장애 시 직전 스코어 이력을 그대로 반환(별도 캐시 계층 없이 fallback)
+  - 연동 중 겪은 버그 2건(`PythonEngineConfig`/`ScoreBatchApiRequest` 코드
+    주석에도 근거 남김):
+    - JDK `HttpClient`는 평문(`http://`) 연결에도 기본적으로 HTTP/2
+      cleartext(h2c) 업그레이드를 시도하는데, uvicorn(h11)이 이를
+      지원하지 않아 POST 바디가 통째로 유실됨(Python에서 "body: Field
+      required"로 관측) - `HttpClient`를 HTTP/1.1로 고정해 해결
+    - `RestClient` 기본 Jackson 컨버터가 `LocalDate`를 `[2026,7,1]`
+      배열로 직렬화해 Python(pydantic) 파싱이 깨짐 - 날짜 필드를
+      `String`으로 바꿔 `LocalDate.toString()`으로 직접 포맷해 해결
+    - 이후 코드리뷰(멀티에이전트)로 추가 발견한 4건(빈 배치 전체 실패,
+      트랜잭션 경계, 배치 저장 항목별 격리, N+1 등)은 `ScorePersistenceService`
+      분리를 포함한 별도 커밋들로 수정 완료
 
 ### ✅ Phase 4 — WebSocket 실시간 (완료)
 - [x] STOMP 세팅 (`/ws/stocks`, SockJS, `/topic` 심플 브로커)
