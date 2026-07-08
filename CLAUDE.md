@@ -474,8 +474,12 @@ com.quantlab/{feature}/
 
 ## 11. 자주 쓰는 명령어
 
+> 로컬에서 백엔드+프론트엔드를 함께 띄우는 법, 개발용 로그인으로 실제
+> OAuth 없이 인증 화면 검증하기, Playwright로 실제 브라우저 동작을
+> 검증하는 방법론은 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) 참고.
+
 ```bash
-# 인프라 실행 (MySQL 3308, Redis 6379)
+# 인프라 실행 (MySQL 3308, Redis 6381)
 docker-compose up -d
 
 # 백엔드 실행
