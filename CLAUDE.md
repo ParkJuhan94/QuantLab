@@ -23,12 +23,29 @@ quantlab/
 ├── CLAUDE.md                   # 이 파일
 ├── README.md
 ├── .gitignore
-├── docker-compose.yml
+├── docker-compose.yml           # 로컬 개발용 인프라(MySQL 3308, Redis 6381)
+├── docker-compose.prod.yml      # 배포용 전체 스택(단일 EC2, Phase 6)
+├── docker-compose.cloudwatch.yml # EC2 전용 로그 오버레이(awslogs 드라이버, Phase 6)
+├── .env.prod.example            # 프로덕션 시크릿 템플릿(Phase 6)
+│
+├── docs/                        # 프로젝트 전반 문서
+│   ├── DEVELOPMENT.md           # 로컬 개발 실행 + Playwright/배포 아티팩트 검증 방법론
+│   └── DEPLOYMENT.md            # EC2 배포 런북(Phase 6 - IAM/로그/모니터링/백업 포함)
+│
+├── scripts/                     # EC2에서 cron으로 도는 운영 스크립트(Phase 6)
+│   ├── report-health-metric.sh  # 헬스체크·메모리·디스크 → CloudWatch 커스텀 메트릭
+│   ├── backup-mysql.sh          # mysqldump → S3
+│   └── install-cron.sh          # 위 스크립트들을 멱등하게 crontab 등록
+│
+├── .github/workflows/            # Phase 6
+│   ├── ci.yml                    # 백엔드/퀀트엔진/프론트 빌드+테스트
+│   └── deploy.yml                # 태그 푸시 시 GHCR 푸시 → EC2 배포
 │
 ├── backend/                    # Spring Boot 멀티모듈 프로젝트
 │   ├── build.gradle            # 루트 빌드 파일
 │   ├── settings.gradle         # 모듈 정의 (api, core, common, event)
 │   ├── .env.example            # 환경변수 템플릿
+│   ├── Dockerfile              # 멀티스테이지(JDK 빌더 → JRE 런타임, Phase 6)
 │   ├── api/                    # REST 컨트롤러, Swagger, 전역 예외 핸들러
 │   │   └── src/main/java/com/quantlab/
 │   │       ├── QuantLabApplication.java
@@ -36,6 +53,9 @@ quantlab/
 │   │       ├── common/config/       # SwaggerConfig
 │   │       ├── common/exception/    # GlobalExceptionHandler
 │   │       └── stock/controller/    # StockController
+│   │   └── src/main/resources/
+│   │       ├── application.yml       # 공통 + dev 기본값
+│   │       └── application-prod.yml  # 프로덕션 오버라이드(Phase 6)
 │   ├── core/                   # 서비스, 리포지토리, 도메인, DTO
 │   │   └── src/main/java/com/quantlab/
 │   │       ├── common/              # TimeBaseEntity, Config, Exception
@@ -49,11 +69,14 @@ quantlab/
 ├── quant-engine/               # Python FastAPI 퀀트 계산 서버
 │   ├── main.py
 │   ├── requirements.txt
+│   ├── Dockerfile              # python:3.11-slim + uvicorn(Phase 6)
 │   └── calculator/
 │       ├── indicators.py       # RSI, MACD, 볼린저밴드 등
 │       └── scorer.py           # 스코어링 & 등급 산출
 │
 └── frontend/                   # React 19 + TypeScript + Vite + Tailwind CSS
+    ├── Dockerfile               # vite build → nginx 정적 서빙(Phase 6)
+    ├── nginx.conf                # /api·/ws 리버스 프록시 + SPA 폴백(Phase 6)
     └── src/
         ├── main.tsx             # QueryClientProvider + BrowserRouter + AuthProvider
         ├── App.tsx              # 라우트 + 레이아웃
@@ -379,7 +402,7 @@ spring:
     -f docker-compose.cloudwatch.yml config`로 로컬에서 머지만 검증(실제
     AWS 전송은 EC2 몫)
   - 모니터링/알림: CloudWatch Agent 대신 `scripts/report-health-metric.sh`
-    (헬스체크·메모리·디스크 3개를 커스텀 메트리 네임스페이스로 전송,
+    (헬스체크·메모리·디스크 3개를 커스텀 메트릭 네임스페이스로 전송,
     cron 5분 간격) - Agent는 설치·설정 파일이 필요해 이 규모엔 과함,
     커스텀 메트릭은 계정당 10개까지 상시 무료라 비용 차이도 없음(사용자
     확인 후 채택). SNS 알람 4종(EC2 상태·앱 헬스체크·디스크·메모리)은
@@ -550,7 +573,10 @@ com.quantlab/{feature}/
 
 > 로컬에서 백엔드+프론트엔드를 함께 띄우는 법, 개발용 로그인으로 실제
 > OAuth 없이 인증 화면 검증하기, Playwright로 실제 브라우저 동작을
-> 검증하는 방법론은 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) 참고.
+> 검증하는 방법론, **배포 아티팩트(Docker) 로컬 검증**은
+> [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) 참고. EC2 실배포
+> 절차(Elastic IP, IAM, 로그/모니터링/백업 포함)는
+> [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) 참고.
 
 ```bash
 # 인프라 실행 (MySQL 3308, Redis 6381)
@@ -573,6 +599,12 @@ mysql -h 127.0.0.1 -P 3308 -u root -pquantlab quantlab
 
 # Redis 접속
 docker exec -it quantlab-redis redis-cli
+
+# 배포 이미지 로컬 빌드 검증 (AWS 자격증명 불필요, docs/DEVELOPMENT.md §3 참고)
+docker compose -f docker-compose.prod.yml build
+
+# 배포 오버레이 머지 결과만 확인(컨테이너 기동 없이)
+docker compose -f docker-compose.prod.yml -f docker-compose.cloudwatch.yml config
 ```
 
 ---

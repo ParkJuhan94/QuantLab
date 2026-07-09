@@ -139,3 +139,78 @@ const { scrollWidth, clientWidth } = await mobilePage.evaluate(() => ({
 - React Query 기본 재시도(3회, 지수 백오프) 때문에 백엔드 장애 시
   에러 노출까지 7초 넘게 걸리던 것 — 네트워크 장애를 실제로
   시뮬레이션해 시간을 측정하고서야 드러남.
+
+---
+
+## 3. 배포(Docker) 아티팩트 로컬 검증
+
+`docker-compose.prod.yml`(EC2 배포용, `docs/DEPLOYMENT.md` 참고)을 고치고
+나서 실제 EC2에 올리기 전에 로컬에서 검증할 수 있는 부분과 없는 부분을
+구분해야 한다. 이미지 빌드·컨테이너 간 배선·헬스체크는 로컬에서 100%
+검증 가능하고, 실제 AWS 리소스(S3/CloudWatch/SNS)만 EC2에서 확인 가능하다.
+
+### 전체 스택 로컬 기동
+
+```bash
+# 시크릿 파일 준비(실제 값 없이 형식만 맞아도 로컬 기동엔 충분 - Toss/OAuth
+# 관련 값은 실제 자격증명이 없으면 그 기능만 실패하고 나머지는 정상 기동)
+cp .env.prod.example .env.prod
+
+# 이미지 3개 빌드 + 전체 스택 기동(dev용 docker-compose.yml과는
+# name: quantlab-prod로 프로젝트명이 분리돼 있어 dev MySQL/Redis와
+# 컨테이너·볼륨이 겹치지 않는다)
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+
+curl http://localhost/api/health          # {"status":"UP",...}
+curl http://localhost/                     # SPA index.html
+curl -X POST http://localhost/dev/auth/token  # 405(nginx가 /dev를 안 막고 SPA로 떨어뜨림)
+
+# 정리 - 로컬 전용 시크릿 파일은 커밋 대상이 아니므로 검증 끝나면 삭제
+docker compose -f docker-compose.prod.yml --env-file .env.prod down
+rm .env.prod
+```
+
+### CloudWatch 오버레이는 머지 결과만
+
+`docker-compose.cloudwatch.yml`(로그 수집용, `awslogs` 드라이버)은 실제
+AWS 자격증명이 있어야 컨테이너가 기동되므로 로컬에서 `up`까지는 못 한다.
+`config`는 API 호출 없이 YAML만 머지하므로 로컬에서도 검증 가능:
+
+```bash
+docker compose -f docker-compose.prod.yml -f docker-compose.cloudwatch.yml \
+  --env-file .env.prod config | grep -A5 "logging:"
+# 5개 서비스 모두 driver: awslogs 인지, awslogs-group이 서비스별로
+# 맞게 갈렸는지(/quantlab/backend 등) 확인
+```
+
+### 신규 셸 스크립트는 문법 검사까지만
+
+`scripts/*.sh`(모니터링 지표 전송, MySQL 백업, cron 등록)는 EC2 호스트
+전제(컨테이너 이름 `quantlab-prod-*`을 직접 참조, `aws` CLI 호출)라
+로컬에서 실행까지는 의미 없다. 문법 오류만 로컬에서 잡는다:
+
+```bash
+bash -n scripts/report-health-metric.sh
+bash -n scripts/backup-mysql.sh
+bash -n scripts/install-cron.sh
+```
+
+**`scripts/install-cron.sh`는 로컬에서 실제로 실행하지 말 것** - 이
+스크립트는 현재 로그인한 사용자의 진짜 `crontab`을 수정한다. EC2 위
+전용 스크립트를 로컬 개발 머신에서 돌리면 본인 macOS/Linux 계정의
+크론탭이 오염된다.
+
+### 이 방식으로 실제 세션에서 잡은 버그 예시
+
+- `docker-compose.prod.yml`에 프로젝트명을 명시하지 않았더니, dev용
+  `docker-compose.yml`과 같은 디렉터리라 기본 프로젝트명(디렉터리명)을
+  공유해 로컬에서 prod 스택을 검증차 띄우자 dev MySQL/Redis 컨테이너·
+  볼륨을 그대로 재사용(사실상 덮어씀)해버린 것 — 실제로 `docker compose
+  up`을 돌려보고 `Recreate` 로그를 보고서야 발견했다(`name: quantlab-prod`
+  로 해결).
+- `GlobalExceptionHandler`의 catch-all이 매핑되지 않은 모든 경로를
+  500으로 응답시키고 있던 것 — `/dev/auth/token`이 prod 프로파일에서
+  정말 404가 되는지 문서에 쓰기 전에 실제 컨테이너에 curl을 날려보다
+  발견(nginx 계층에서 먼저 405로 막힌다는 것도 이때 같이 확인했다 -
+  둘 다 실제로 요청을 보내보지 않았다면 문서에 틀린 내용을 남길
+  뻔했다).
