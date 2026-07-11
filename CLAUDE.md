@@ -763,3 +763,41 @@ docker compose -f docker-compose.prod.yml -f docker-compose.cloudwatch.yml confi
   프로비저닝·검증해야 함 - AWS 리소스라 이 세션에서 생성 불가
 - 나머지 미완 항목(AWS EC2 실배포, OAuth 라운드트립, 세션 범위 밖
   로컬 변경 2건 검토)은 위 항목과 동일하게 유지
+
+### 2026-07-11 - 네이버 로그인 닉네임 필수 오류 수정 (+ 카카오 방어 로직 동기화)
+
+**변경 사항**
+- 실서버 로그에서 네이버 로그인 시 `IllegalArgumentException: 닉네임은 필수입니다.`
+  발생을 확인 - `User.validateUser`의 `Assert.hasText(nickname, ...)`에서
+  터진 것으로, 원인은 `NaverOAuthClient`가 네이버 응답의 `nickname` 필드를
+  fallback 없이 그대로 `OAuthUserInfo`에 넘기고 있었기 때문(네이버 콘솔에서
+  닉네임이 선택 동의 항목이라 값이 안 올 수 있음)
+- 구글은 `name` 클레임이 사실상 항상 오는 `profile` 스코프라 문제가 없었고,
+  카카오는 이미 `DEFAULT_NICKNAME` fallback이 있었던 것과 비교해 네이버만
+  누락돼 있었음을 확인 후 네이버에도 동일한 fallback(`"네이버사용자"`) 추가
+- 겸사겸사 카카오의 fallback 조건도 `nickname != null` → `StringUtils.hasText(nickname)`으로
+  강화(카카오가 빈 문자열을 내려주는 경우까지 방어)
+- 중간에 "구글처럼 이름을 항상 받아오면 되지 않냐"는 아이디어로 카카오/네이버
+  모두 닉네임 대신 실명(`이름`) 필드를 쓰도록 한 차례 변경했으나, 카카오
+  디벨로퍼스 콘솔에서 `이름` 동의 항목 자체가 사업자 심사 없이는 추가가
+  안 된다는 걸 사용자가 콘솔에서 직접 확인 - 다시 닉네임 기반으로 전량 되돌림
+  (구글은 애초에 이름/닉네임이 분리된 필드가 아니라 되돌릴 대상이 없었음)
+
+**변경 파일**
+- `backend/core/src/main/java/com/quantlab/infra/oauth/NaverOAuthClient.java` - `DEFAULT_NICKNAME` fallback 추가
+- `backend/core/src/main/java/com/quantlab/infra/oauth/KakaoOAuthClient.java` - null 체크 → `StringUtils.hasText` 강화
+- `backend/core/src/test/java/com/quantlab/infra/oauth/{Kakao,Naver}OAuthClientTest.java` - fallback 검증 테스트 추가
+
+**결정 사항**
+- 카카오/네이버의 "닉네임" 동의 항목은 콘솔에서 필수 동의로 바꾸면 항상
+  값이 오게 만들 수 있지만(구글의 `profile` 스코프와 동일한 효과), 그와
+  별개로 코드의 fallback은 유지하기로 함 - 콘솔 설정 드리프트나 기존
+  선택 동의 가입자의 재로그인 케이스에 대한 안전망 비용이 거의 0
+
+**다음 작업**
+- 카카오/네이버 콘솔에서 "닉네임" 동의 항목을 필수 동의로 전환할지는
+  사용자가 판단 필요(실명/이름 동의는 카카오 기준 사업자 심사가 필요해 보류)
+- 세션 시작 시점부터 있던 미커밋 변경 다수(`OAuthProperties.java`,
+  `GoogleOAuthClientTest.java`, `application.yml`, `.env.example` 2건,
+  `docs/DEPLOYMENT.md`, `frontend/README.md`, 프론트 차트 지표 관련
+  3개 파일)는 이번 세션 범위 밖이라 그대로 둠 - 다음 세션에서 검토 필요
