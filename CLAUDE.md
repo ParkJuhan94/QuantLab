@@ -801,3 +801,48 @@ docker compose -f docker-compose.prod.yml -f docker-compose.cloudwatch.yml confi
   `GoogleOAuthClientTest.java`, `application.yml`, `.env.example` 2건,
   `docs/DEPLOYMENT.md`, `frontend/README.md`, 프론트 차트 지표 관련
   3개 파일)는 이번 세션 범위 밖이라 그대로 둠 - 다음 세션에서 검토 필요
+
+### 2026-07-11 - 종목 로고 표시(네이버 금융 비공식 정적 경로 연동)
+
+**변경 사항**
+- 토스증권 Open API 스펙(`toss-openapi.json`)에 로고/이미지 필드가 전혀
+  없어 기업 로고 조회가 불가능함을 확인. 대안으로 네이버 금융 모바일 API
+  (`m.stock.naver.com/api/stock/{code}/basic`)의 JSON 응답을 실제로
+  호출해 `itemLogoUrl`/`itemLogoPngUrl` 필드에서 정적 로고 경로 패턴
+  (`ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock{종목코드}.png`)을
+  발견 - 대형주(삼성전자·카카오)뿐 아니라 소형주 5종목을 무작위 표본
+  추출해 curl로 200 응답을 재검증한 뒤 채택
+- 이 경로는 종목 코드만으로 결정적으로 생성 가능해 별도 API 호출/캐싱
+  계층 없이 `StockMapper`에서 문자열 포맷팅만으로 `StockDetailResponse.
+  logoUrl`을 채움
+- 프론트엔드에 `StockLogo` 공용 컴포넌트를 추가해 검색 결과 목록과 종목
+  상세 페이지 헤더에 적용 - 이미지 로드 실패 시(`onError`) 종목명 첫
+  글자 원형 placeholder로 조용히 대체
+
+**변경 파일**
+- `backend/core/src/main/java/com/quantlab/stock/dto/response/StockDetailResponse.java` - `logoUrl` 필드 추가
+- `backend/core/src/main/java/com/quantlab/stock/dto/mapper/StockMapper.java` - 종목 코드 기반 로고 URL 생성
+- `frontend/src/types/stock.ts` - `logoUrl` 타입 반영
+- `frontend/src/components/common/StockLogo.tsx`(신규) - 로드 실패 폴백 포함 공용 로고 컴포넌트
+- `frontend/src/components/search/SearchResultItem.tsx`, `frontend/src/pages/StockDetailPage.tsx` - 로고 적용
+
+**결정 사항**
+- 네이버가 공식 문서화한 계약이 아닌 비공식 정적 경로이므로, 백엔드에서
+  존재 여부를 사전 검증(HEAD 요청 등)하거나 캐싱하지 않고 프론트 `onError`
+  폴백에만 의존하기로 함 - 서버 왕복을 늘리지 않으면서, 경로가 막히거나
+  개별 종목에 로고가 없어도 화면이 깨지지 않도록 하는 선에서 방어 비용을
+  최소화
+- 관심종목 목록·스코어 대시보드 랭킹에도 로고를 넣을 수 있지만, 이번엔
+  요청받은 범위(종목 상세/검색)로 한정 - 확장은 동일 패턴 재사용으로 쉬움
+
+**다음 작업**
+- 사용자가 증권사 계좌 연동(보유종목/수익률 표시) 가능 여부를 문의 -
+  토스증권 현재 연동은 사용자별 위임이 아닌 앱 단위 Client Credentials라
+  개인 보유잔고 조회 불가. 한국투자증권(KIS) Open API가 개인 발급 가능해
+  가장 현실적인 시작점이라고 답변만 하고 실제 구현은 아직 착수 안 함 -
+  사용자가 증권사를 확정하면 다음 세션에서 설계 착수
+- 세션 시작 시점부터 있던 미커밋 변경 다수(`OAuthProperties.java`,
+  `GoogleOAuthClientTest.java`, `application.yml`, `.env.example` 2건,
+  `docs/DEPLOYMENT.md`, `frontend/README.md`, `CandleChart.tsx`,
+  `config/oauth.ts`, `IndicatorControls.tsx`, `utils/indicators.ts`)는
+  여전히 이번 세션 범위 밖이라 그대로 둠 - 다음 세션에서 검토 필요
