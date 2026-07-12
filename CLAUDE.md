@@ -1010,3 +1010,176 @@ docker compose -f docker-compose.prod.yml -f docker-compose.cloudwatch.yml confi
   범위 밖이라 그대로 둠 - 다음 세션에서 검토 필요
 
 </details>
+
+<details>
+<summary>2026-07-12 - 홈 화면 목(mock) 데이터 중 2건을 실데이터로 전환(환율·비트코인 위젯, 급등락 실시간 랭킹)</summary>
+
+**변경 사항**
+- 직전 세션(홈 리디자인)에서 예시 데이터로 남겨뒀던 항목들을
+  `docs/ROADMAP.md` 난이도 기준으로 재우선순위화한 뒤, 사용자가 "환율·
+  비트코인 위젯"과 "급등락 실시간 랭킹" 둘 다 진행하기로 결정 - 두
+  기능 모두 실제 백엔드를 새로 구현
+- **환율·비트코인**: `TossApiClient.getExchangeRate(base, quote)` 추가
+  (`GET /api/v1/exchange-rate`, Rate Limits Group이 시세 폴링과 분리된
+  `MARKET_INFO`라 `PriceBroadcastScheduler` 예산과 안 겹침) + Upbit
+  공개 티커 API 신규 연동(`infra/upbit/`, `infra/kind/` 5파일 템플릿
+  그대로 재사용 - 인증 불필요한 공개 REST API라 KIND보다 단순).
+  `MarketIndexCache`가 20초 TTL로 두 응답을 합쳐 캐싱(`MarketCalendarCache`와
+  동일한 단순 TTL 캐시 패턴) → `GET /api/market/indices`
+- **급등락 실시간 랭킹**: `MarketRankingScheduler` 신규 - 전 상장 종목
+  (`AllListedStockCache`, 10분 TTL, `StockRepository.findByListingStatus`
+  재사용)을 200개씩 청크로 `getCurrentPrices` 호출해 전일종가
+  (`PreviousCloseCache` 재사용) 대비 등락률을 계산, `MarketRankingCache`
+  (메모리 스냅샷, Redis 아님 - 단일 인스턴스 배치 결과라 재시작 시
+  초기화돼도 다음 틱에 다시 채워짐)에 적재. `PriceBroadcastScheduler`와
+  동일한 Toss `MARKET_DATA` Rate Limit 예산을 나눠 쓰므로 주기를 5초로
+  분리(`market-ranking.poll-interval-ms`), 청크 하나가 429 등으로
+  실패해도 그 청크만 스킵하고 다음 틱에 재시도(전체 스윕은 안 막음).
+  `GET /api/market/ranking?sort=gainers|losers&limit=`
+- 프론트 `RankingTable`을 급상승/급하락 탭에서만 실데이터(5개 컬럼 -
+  거래대금/시가총액은 백엔드가 아직 없어 제외)로 전환하고, 거래대금/
+  거래량 탭은 기존 예시 데이터(7개 컬럼)를 그대로 유지 - 데이터 출처가
+  섞이지 않도록 캡션도 탭별로 다르게("실제 등락률로 정렬한..." vs
+  "예시 데이터입니다..."). `HomeSidePanel`의 "실시간" 탭도 같은 급상승
+  API를 재사용하도록 전환
+- `MarketIndexRow`는 달러 환율·비트코인만 실데이터로 바꾸고 나머지
+  5개 지수(코스피/코스닥/나스닥/S&P500/필라델피아반도체)는 여전히
+  예시 데이터 - 캡션을 "환율·비트코인은 실시간, 나머지는 예시 데이터"로
+  구체화
+
+**변경 파일**
+- `backend/core/.../infra/toss/{TossApiClient,dto/TossExchangeRateResponse,
+  exception/TossApiErrorCode}.java` — 환율 조회 추가(`TOSS_007`)
+- `backend/core/.../infra/upbit/`(신규 5파일) — Upbit 클라이언트
+- `backend/core/.../market/`(신규) — `cache/{MarketIndexCache,
+  AllListedStockCache,MarketRankingCache}`, `scheduler/MarketRankingScheduler`,
+  `service/{MarketIndexService,MarketRankingService}`,
+  `dto/response/{MarketIndexResponse,MarketRankingResponse}`,
+  `exception/MarketErrorCode`
+- `backend/api/.../market/controller/MarketController.java`(신규) —
+  `GET /api/market/indices`, `GET /api/market/ranking`
+- `backend/api/.../auth/config/SecurityConfig.java` — `/api/market/**`
+  permit-all 추가(다른 사용자와 무관한 공개 시장 데이터라 `/api/stocks/**`와
+  동일하게 취급)
+- `backend/api/src/main/resources/application.yml`, `backend/.env.example` —
+  `upbit.base-url`, `market-ranking.poll-interval-ms` 추가
+- 테스트 4종(`AllListedStockCacheTest`, `MarketIndexCacheTest`,
+  `MarketRankingCacheTest`, `MarketRankingSchedulerTest` - 전부 unit,
+  기존 `WatchlistedStockCodeCacheTest`/`MarketCalendarCacheTest`/
+  `PriceBroadcastSchedulerTest` 패턴 그대로 따름) + `MarketControllerTest`
+  (integration, `MarketIndexCache`/`MarketRankingCache`를 직접 목으로
+  대체 - `PriceControllerTest`가 `PriceCacheStore`를 목으로 대체하는 것과
+  동일한 이유: TTL 있는 상태 저장 빈을 컨트롤러 테스트에 그대로 두면
+  같은 스프링 컨텍스트를 공유하는 다른 테스트의 잔여 캐시값에 결과가
+  갈릴 수 있음)
+- `frontend/src/{types,api,hooks/queries}/market*.ts`(신규),
+  `frontend/src/components/home/{MarketIndexRow,RankingTable,
+  HomeSidePanel}.tsx`, `frontend/src/mock/marketMock.ts`(환율·비트코인
+  항목 제거), `frontend/src/hooks/queryKeys.ts`
+
+**결정 사항**
+- 랭킹 캐시는 Redis가 아니라 메모리 `volatile` 필드로 결정 - 단일
+  인스턴스 배치 결과를 5초마다 통째로 교체하는 용도라 인스턴스 간
+  공유가 필요 없고, 재시작 시 초기화돼도 다음 틱(장중 기준 수 초 내)에
+  다시 채워지므로 영속성 이점이 없음(`WatchlistedStockCodeCache` 등
+  기존 캐시들과 동일한 "단순 메모리 TTL 캐시" 철학 유지)
+- 거래대금/거래량은 이번 스코프에서 제외 - `docs/ROADMAP.md` #2b/#2c가
+  이미 분석했듯 별도 데이터 소스(일배치 스크래핑 또는 외부 소스 우회)가
+  필요해 "급등락(등락률)"과 난이도·구현 방식이 다름. 사용자가 승인한
+  범위는 "환율·비트코인"과 "급등락 실시간 랭킹" 둘뿐이라 그대로 지킴
+- 실시간 급등락 랭킹에 별도 WebSocket 토픽을 추가하지 않고 프론트
+  React Query `refetchInterval: 5000`로 REST 폴링만 사용 - 기존
+  `PriceBroadcastScheduler`도 "REST 폴링 → STOMP 변환"이지 Toss가 실제
+  푸시를 주는 게 아니므로, 개별 종목처럼 소켓을 추가해도 진짜 실시간이
+  되는 게 아니라 복잡도만 늘어난다고 판단
+- 검증 도중 발견: 이전 세션에서 `pkill -f ":api:bootRun"`으로 백엔드를
+  껐다고 여겼으나, 그 패턴은 그레이들 래퍼 프로세스만 매치하고 실제
+  포그라운드로 남는 스프링 부트 JVM 자식 프로세스(`com.quantlab.
+  QuantLabApplication`)는 매치하지 못해 살아있었음 - 이번 세션 초반
+  `/api/market/**` permitAll 반영 전 코드로 계속 떠 있던 그 프로세스가
+  새 bootRun의 포트 바인딩을 막아 401이 나온 것으로 원인 파악 후 PID로
+  직접 kill해서 해결. 앞으로 bootRun을 내릴 땐 프로세스명
+  (`QuantLabApplication`)까지 같이 pkill할 것
+- Testcontainers 기반 통합 테스트(`MarketControllerTest` 포함)는 이
+  로컬 환경에서 "Could not find a valid Docker environment"로 전부
+  실패함을 확인(기존 `PriceControllerTest`도 동일하게 실패해 내
+  변경과 무관한 환경 문제로 확인) - 실제 검증은 unit 테스트 15개
+  전부 통과 + `docker-compose` 인프라로 띄운 실제 서버에 curl/Playwright로
+  대체. 통합 테스트 자체는 CI 등 Docker 소켓이 정상 인식되는 환경에서
+  마저 실행되어야 함
+
+**다음 작업**
+- 여전히 미착수: 코스피·코스닥 국내지수(#1 나머지), 해외지수·VIX(#1),
+  거래대금/거래량 랭킹(#2b/#2c), AI 요약(#3), 커뮤니티/피드(#4),
+  관심종목 다중 그룹(#6), 의견 피드백(#7) - `docs/ROADMAP.md` 권장
+  우선순위 참고
+- Testcontainers Docker 소켓 인식 문제(로컬 환경)는 이번 세션 범위 밖
+  이슈로 남겨둠 - 통합 테스트를 실제로 로컬에서 돌리려면 별도 조사 필요
+
+</details>
+
+<details>
+<summary>2026-07-12 - CI 파이프라인 복구(무관한 4가지 브레이킹 이슈) + 토스 API 로그 격리</summary>
+
+**변경 사항**
+- `.github/workflows/ci.yml` 도입 이후 사실상 처음으로 fresh checkout
+  검증이 제대로 돌면서, 서로 무관한 4가지 문제가 동시에 CI를 막고
+  있었음을 하나씩 진단·수정:
+  1. `gradle-wrapper.jar`가 한 번도 커밋된 적이 없었음 - `.gitignore`의
+     부정 패턴(`!gradle/wrapper/gradle-wrapper.jar`)이 실제 경로
+     (`backend/gradle/wrapper/`)와 안 맞아 `*.jar` 전체 무시 규칙에
+     계속 가려짐(`git check-ignore -v`로 원인 규칙까지 확인)
+  2. `AuthControllerTest`/`WatchlistControllerTest`가 로컬
+     `backend/.env`(gitignore 대상) 존재에 암묵 의존 - CI엔 그 파일이
+     없어 JWT 시크릿이 빈 문자열이 돼 `WeakKeyException`으로 8개 전부
+     실패. `.env`를 실제로 치워보고 재현 후 테스트 전용 프로파일로 수정
+  3. `StockDetailPage.tsx`가 참조하는 `IndicatorControls.tsx`/
+     `utils/indicators.ts`/`CandleChart.tsx` 변경사항이 디스크엔
+     있었지만 git엔 없었음(다른 세션의 git add 누락으로 보임) - 내용
+     확인 후 사용자 승인 받아 그대로 커밋
+  4. OAuth `redirectUri`를 정적 설정에서 요청별 동적값으로 옮기는
+     리팩터링이 절반만 커밋돼 `OAuthProperties.Provider`와 테스트
+     시그니처가 어긋나 있었음 - 실제 사용처(`OAuthClientDispatcher`
+     등)를 추적해 안전한 완료인지 확인 후 마무리
+- CI가 그린이 된 뒤에도 남아있던 "토스증권 API 토큰 발급 실패" 로그를
+  사용자가 "토스 쪽에 GitHub IP를 허용 안 해서 그런 거냐"고 질문 -
+  로그의 `Caused by` 체인을 직접 확인해 `invalid_client`(400) 응답임을
+  근거로 IP 차단이 아니라 CI에 `TOSS_CLIENT_ID`/`SECRET` 자체가 없어서
+  생기는 정상적인(그리고 무해한) 노이즈임을 규명
+- 사용자가 시크릿 추가를 검토하길래, 실제 자격증명을 CI에 넣으면
+  토스 토큰이 계정당 1개만 유효해(재발급 시 이전 토큰 즉시 무효화)
+  push마다 도는 CI가 로컬/운영이 쓰던 토큰을 예고 없이 무효화시킬 수
+  있다는 위험을 짚고 반대, 대신 `WatchlistControllerTest`에
+  `TossApiClient`를 `@MockBean`으로 격리하는 쪽을 제안해 승인받고 구현
+
+**변경 파일**
+- `.gitignore`, `backend/gradle/wrapper/gradle-wrapper.jar`(최초 커밋)
+- `backend/api/src/test/resources/application-test.yml`(신규) - 테스트
+  전용 JWT 시크릿
+- `frontend/src/components/chart/{IndicatorControls,CandleChart}.tsx`,
+  `frontend/src/utils/indicators.ts`(신규)
+- `backend/core/.../infra/oauth/OAuthProperties.java` 외 OAuth
+  리팩터링 완료 관련 8개 파일(`.env.example`, `application.yml`,
+  `docs/DEPLOYMENT.md` 등)
+- `backend/api/src/test/java/.../WatchlistControllerTest.java` -
+  `TossApiClient` mock 격리
+
+**결정 사항**
+- 실제 Toss 시크릿을 CI에 넣는 대신 mock 격리를 택함 - 토큰 단일
+  유효성 제약이 만드는 실서비스 영향 리스크가 로그 노이즈 제거보다
+  훨씬 크다고 판단
+- 이번 세션 중 발견한, 내가 만들지 않은 우연한 미커밋 변경(프론트
+  3파일, OAuth 완료 커밋)은 전부 "발견 → 사용자에게 확인 → 승인받고
+  진행" 순서를 지켰음. 특히 OAuth 필드 제거는 실제 호출부를 추적해
+  죽은 필드임을 코드로 직접 확인한 뒤에만 커밋
+- 로컬 Testcontainers가 이 머신의 최신 Docker Desktop과 버전
+  비호환이라(무관한 기존 테스트도 동일하게 실패) `WatchlistControllerTest`
+  수정은 컴파일 검증 + 실제 CI 실행 결과로 검증. 같은 시기 다른
+  세션도 독립적으로 동일 문제를 발견해 기록해둔 것을 확인(중복 조사
+  아님)
+
+**다음 작업**
+- 없음(이 세션 범위 내). 로컬 Testcontainers Docker 호환 문제는 앞선
+  작업기록 항목에 이미 남아있어 중복 기록하지 않음
+
+</details>
