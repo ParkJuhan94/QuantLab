@@ -317,11 +317,12 @@ Secrets and variables → Actions):
 로컬 개발은 `http://localhost:3001/oauth/callback/{provider}`를 콘솔에
 등록해뒀지만, 실제 배포 도메인에서는 각 프로바이더(구글/카카오/네이버)
 콘솔에 **운영 도메인 기준 redirect URI**를 추가로 등록해야 한다(예:
-`https://your-domain.example.com/oauth/callback/google`). `.env.prod`의
-`GOOGLE_REDIRECT_URI` 등도 동일하게 맞출 것. 이 프로바이더 콘솔 등록
-작업은 각 계정 소유자가 직접 진행해야 하는 부분으로, 실제 OAuth
-라운드트립 검증은 이 등록이 끝난 뒤에만 가능하다(CLAUDE.md "다음 작업"에
-기록된 미완 항목).
+`https://your-domain.example.com/oauth/callback/google`). 리다이렉트
+URI는 프론트가 `window.location.origin` 기준으로 런타임에 동적 생성해
+백엔드로 넘기므로 `.env.prod`에 별도 값을 맞출 필요는 없고, 프로바이더
+콘솔 등록만 하면 된다. 이 콘솔 등록 작업은 각 계정 소유자가 직접
+진행해야 하는 부분으로, 실제 OAuth 라운드트립 검증은 이 등록이 끝난
+뒤에만 가능하다(CLAUDE.md "다음 작업"에 기록된 미완 항목).
 
 ## 11. TLS(다음 단계, 이번 범위 밖)
 
