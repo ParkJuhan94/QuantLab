@@ -179,7 +179,7 @@ const { scrollWidth, clientWidth } = await mobilePage.evaluate(() => ({
 `docker-compose.prod.yml`(EC2 배포용, `docs/DEPLOYMENT.md` 참고)을 고치고
 나서 실제 EC2에 올리기 전에 로컬에서 검증할 수 있는 부분과 없는 부분을
 구분해야 한다. 이미지 빌드·컨테이너 간 배선·헬스체크는 로컬에서 100%
-검증 가능하고, 실제 AWS 리소스(S3/CloudWatch/SNS)만 EC2에서 확인 가능하다.
+검증 가능하고, 실제 AWS 리소스(S3, DB 백업용)만 EC2에서 확인 가능하다.
 
 ### 전체 스택 로컬 기동
 
@@ -202,25 +202,11 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod down
 rm .env.prod
 ```
 
-### CloudWatch 오버레이는 머지 결과만
-
-`docker-compose.cloudwatch.yml`(로그 수집용, `awslogs` 드라이버)은 실제
-AWS 자격증명이 있어야 컨테이너가 기동되므로 로컬에서 `up`까지는 못 한다.
-`config`는 API 호출 없이 YAML만 머지하므로 로컬에서도 검증 가능:
-
-```bash
-docker compose -f docker-compose.prod.yml -f docker-compose.cloudwatch.yml \
-  --env-file .env.prod config | grep -A5 "logging:"
-# 5개 서비스 모두 driver: awslogs 인지, awslogs-group이 서비스별로
-# 맞게 갈렸는지(/quantlab/backend 등) 확인
-```
-
 ### 모니터링 오버레이는 로컬에서도 실제 기동 가능
 
 `docker-compose.monitoring.yml`(Prometheus/Grafana/Alertmanager/
-node-exporter/cAdvisor, `docs/DEPLOYMENT.md` §13)은 `docker-compose.
-cloudwatch.yml`과 달리 AWS 자격증명이 전혀 필요 없어 로컬에서 전체
-스택을 그대로 기동해 검증할 수 있다:
+node-exporter/cAdvisor, `docs/DEPLOYMENT.md` §10)은 AWS 자격증명이
+전혀 필요 없어 로컬에서 전체 스택을 그대로 기동해 검증할 수 있다:
 
 ```bash
 cp .env.prod.example .env.prod
@@ -246,12 +232,11 @@ Alertmanager 설정(`monitoring/alertmanager/alertmanager.yml`)은 `${VAR}`
 
 ### 신규 셸 스크립트는 문법 검사까지만
 
-`scripts/*.sh`(모니터링 지표 전송, MySQL 백업, cron 등록)는 EC2 호스트
-전제(컨테이너 이름 `quantlab-prod-*`을 직접 참조, `aws` CLI 호출)라
-로컬에서 실행까지는 의미 없다. 문법 오류만 로컬에서 잡는다:
+`scripts/*.sh`(MySQL 백업, cron 등록)는 EC2 호스트 전제(컨테이너 이름
+`quantlab-prod-*`을 직접 참조, `aws` CLI 호출)라 로컬에서 실행까지는
+의미 없다. 문법 오류만 로컬에서 잡는다:
 
 ```bash
-bash -n scripts/report-health-metric.sh
 bash -n scripts/backup-mysql.sh
 bash -n scripts/install-cron.sh
 ```

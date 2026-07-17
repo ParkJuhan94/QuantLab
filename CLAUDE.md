@@ -43,21 +43,20 @@ quantlab/
 ├── .gitignore
 ├── docker-compose.yml           # 로컬 개발용 인프라(MySQL 3308, Redis 6381)
 ├── docker-compose.prod.yml      # 배포용 전체 스택(단일 EC2, Phase 6)
-├── docker-compose.cloudwatch.yml # EC2 전용 로그 오버레이(awslogs 드라이버, Phase 6)
+├── docker-compose.monitoring.yml # PLG 관측성 스택 오버레이(Prometheus/Grafana/Alertmanager)
 ├── .env.prod.example            # 프로덕션 시크릿 템플릿(Phase 6)
 │
 ├── docs/                        # 프로젝트 전반 문서
 │   ├── DEVELOPMENT.md           # 로컬 개발 실행 + Playwright/배포 아티팩트 검증 방법론
-│   └── DEPLOYMENT.md            # EC2 배포 런북(Phase 6 - IAM/로그/모니터링/백업 포함)
+│   └── DEPLOYMENT.md            # EC2 배포 런북(Phase 6 - PLG 모니터링/백업 포함)
 │
 ├── scripts/                     # EC2에서 cron으로 도는 운영 스크립트(Phase 6)
-│   ├── report-health-metric.sh  # 헬스체크·메모리·디스크 → CloudWatch 커스텀 메트릭
 │   ├── backup-mysql.sh          # mysqldump → S3
-│   └── install-cron.sh          # 위 스크립트들을 멱등하게 crontab 등록
+│   └── install-cron.sh          # 위 스크립트를 멱등하게 crontab 등록
 │
 ├── .github/workflows/            # Phase 6
 │   ├── ci.yml                    # 백엔드/퀀트엔진/프론트 빌드+테스트
-│   └── deploy.yml                # 태그 푸시 시 GHCR 푸시 → EC2 배포
+│   └── cd.yml                    # 태그 푸시 시 GHCR 푸시 → EC2 배포
 │
 ├── backend/                    # Spring Boot 멀티모듈 프로젝트
 │   ├── build.gradle            # 루트 빌드 파일
