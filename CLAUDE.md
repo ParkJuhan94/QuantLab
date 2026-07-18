@@ -507,6 +507,9 @@ catch-all(`@ExceptionHandler(Exception.class)`)이 Spring 6의
 - [ ] AI 뉴스 요약 (중, Anthropic 파이프라인 확장)
 - [ ] 거래대금 일배치 랭킹 (중, KRX 스크래핑)
 - [ ] 해외지수·VIX 위젯 (중, 외부 API)
+- [ ] 분봉(1분봉) 차트 (하~중, 토스 API는 이미 지원 - 페이지네이션·저장
+  설계가 남아 2026-07-14 세션에서 TODO로 보류. 상세는
+  `docs/ROADMAP.md` §8 참고)
 
 ---
 
@@ -638,6 +641,50 @@ com.quantlab/{feature}/
 - 포매팅: 4 spaces, 같은 줄 중괄호, 80-100자 줄 길이
 - 상수: `UPPER_SNAKE_CASE` (`private static final`)
 
+### 9.14 프론트엔드 디자인 규칙
+
+> 2026-07-16 세션에서 홈/종목상세/지표설정/피드 전반을 다듬으며 확정한
+> 규칙. "세련되고 깔끔하고 일관성 있게"라는 요청을 이후 세션에서도 같은
+> 기준으로 재현하기 위해 정리해둔다.
+
+- **강조색(파란색 accent)을 쓰지 않는다 - 버튼·선택 상태는 전부 블랙
+  (`bg-gray-900`/`text-gray-900`) 기준으로 통일한다.** 이전엔 홈
+  리디자인 때 넣은 `--color-accent`(#3752ff, Tailwind `bg-accent` 등)를
+  버튼·활성 탭·링크에 두루 썼는데, 화면마다 파란색 톤이 미묘하게 달라
+  보이고 상승/하락을 나타내는 빨강/파랑(§7 국내 주식 관례)과도 시각적으로
+  섞여 헷갈렸다 - 사용자 피드백으로 전부 제거(`index.css`의
+  `--color-accent` 정의 자체도 삭제). Primary 버튼은 `bg-gray-900
+  text-white hover:bg-gray-800`, Secondary는 `border border-gray-200
+  text-gray-700 hover:bg-gray-50`, 텍스트 링크는 `text-gray-700
+  hover:underline`로 통일한다.
+- **"선택됨"은 글자색이 아니라 배경색으로 표시한다.** 사이드패널 탭,
+  피드 주제별 커뮤니티 목록, 관심 그룹 목록 등 "지금 뭐가 선택돼 있는지"
+  보여줘야 하는 곳은 `bg-gray-100 text-gray-900`(선택) vs
+  `text-gray-500/600`(비선택) 패턴을 쓴다 - 파란 텍스트로 선택 상태를
+  나타내던 방식(`text-accent`)을 배경색 방식으로 교체.
+- **실제로 없는 데이터를 숫자로 꾸며내지 않는다.** 랭킹 테이블의
+  "거래대금"처럼 실데이터 소스가 아직 없는 컬럼은 예시 숫자를 채우는
+  대신 "-"로 비워두거나 "아직 준비 중이에요" 같은 정직한 안내를 보여준다
+  (피드 글의 좋아요/댓글 수도 기능이 없어 항상 0). "예시 데이터입니다"
+  캡션으로 얼버무리기보다, 컬럼/필터 단위로 실데이터인지 아닌지를
+  명확히 하는 쪽을 우선한다.
+- **부가 정보(시총/PER 같은 라벨류)는 작게, 자리 안 차지하게.** 카드나
+  별도 섹션으로 만들지 말고 `text-xs text-gray-500` 수준의 한 줄 나열
+  (`라벨 값 · 라벨 값 · ...`)로 압축한다 - 화면의 주인공(가격, 차트,
+  스코어)을 가리지 않는 선에서만 노출.
+- **삼각형(▲▼) 같은 방향 기호는 배경/텍스트 색상만으로 충분히 구분되면
+  생략한다.** 상승 빨강 · 하락 파랑 색상 규칙(§7)이 이미 방향을
+  전달하므로, 기호를 추가로 붙이면 중복이고 좁은 카드에서는 오히려
+  번잡해 보인다.
+- **차트/카드류에 등락 방향을 배경색으로도 은은하게 반영한다.** 지수
+  카드처럼 상승/하락이 있는 요소는 `border-red-100 bg-red-50/60`
+  (상승) / `border-blue-100 bg-blue-50/60`(하락)처럼 옅은 톤의 배경+
+  테두리를 얹어 텍스트 대비를 해치지 않는 선에서 시각적 신호를 준다.
+- **실시간성이 있는 요소는 은은한 펄스 점(`animate-ping` 조합)으로
+  "지금 갱신 중"임을 알린다.** 차트 안에 펄스를 찍기보다(일봉처럼
+  "진행 중" 개념이 맞지 않는 차트도 있음) 상태 라벨("장중" 등) 옆에
+  독립된 작은 점을 붙이는 편이 재사용하기 쉽고 의미도 분명하다.
+
 ---
 
 ## 10. 주의사항 / 금지사항
@@ -652,6 +699,8 @@ com.quantlab/{feature}/
 - Vite는 webpack과 달리 Node.js 전역을 자동 폴리필하지 않는다. `sockjs-client`처럼 `global`을 참조하는 라이브러리를 그대로 번들하면 브라우저에서 "global is not defined"로 페이지 전체가 깨진다 - `frontend/vite.config.ts`에 `define: { global: 'globalThis' }` 필요(이 문제는 해당 라이브러리를 실제로 번들에 포함시키는 순간에만 드러나므로, import만 추가하고 아직 렌더 경로에 안 걸린 코드에서는 안 잡힐 수 있음에 주의)
 - SockJS 클라이언트의 XHR 폴백 트랜스포트(`/ws/stocks/info` 핸드셰이크 등)는 기본적으로 `withCredentials: true`로 요청한다. REST API 인증 자체는 쿠키가 아니라 `Authorization` 헤더를 쓰더라도, 백엔드 CORS 설정에 `allowCredentials(true)`가 없으면 오리진이 일치해도 브라우저가 응답을 차단한다(`backend/api/.../auth/config/SecurityConfig.java`). 허용 오리진을 특정 값 하나로 고정해뒀다면(와일드카드 아님) 안전하게 켤 수 있다
 - **디자인(UI)이나 백엔드 로직을 수정할 때, 요청받은 범위를 벗어나 기존 코드의 구조·스타일·네이밍을 임의로 리팩터링하지 않는다.** 세션이 반복되며 관련 없는 기존 코드가 목적 없이 크게 바뀌어버리는 문제가 실제로 있었음(사용자 피드백, 2026-07-13) - 새 기능/수정은 기존 컴포넌트·패턴을 최대한 재사용하고 꼭 필요한 파일만 건드릴 것. "더 낫다"는 이유만으로 관련 없는 파일의 포매팅·순서·네이밍을 바꾸지 말고, 정말 필요한 리팩터링이면 별도로 제안해 승인받은 뒤 진행할 것(끼워넣기 금지). 전역 규칙은 `~/.claude/CLAUDE.md` "기존 코드 변경 범위 원칙" 참고
+- **Claude Code로 로컬 검증을 위해 띄운 백엔드 개발 서버(8080)는 세션(작업) 종료 시 반드시 종료한다.** `nohup ./gradlew :api:bootRun &`로 백그라운드에 띄운 뒤 끄는 걸 잊으면 다음 세션 시작 시 포트가 이미 점유돼 있거나, 옛 코드로 떠 있는 stale JVM이 새 변경사항을 반영 못 한 채 계속 응답하는 문제가 생긴다(2026-07-15 세션에서 실제로 겪음 - `ClassNotFoundException`으로 500 응답, 원인은 이전 세션이 안 끄고 남긴 stale 프로세스였음). 종료는 `pkill -9 -f "QuantLabApplication"` **및** `pkill -9 -f ":api:bootRun"` 둘 다 실행할 것(그레이들 래퍼 프로세스와 실제 스프링 부트 JVM 자식 프로세스가 별도라 하나만 죽이면 나머지가 포트를 계속 물고 있음 - 2026-07-12 작업 기록 참고). 사용자가 "계속 띄워둬" 등으로 명시적으로 요청한 경우는 예외
+- **Claude Code가 로컬 검증을 위해 프론트엔드 개발 서버를 띄울 땐 기본 3001이 아니라 3002 포트를 쓴다.** 사용자가 로컬에서 3001번으로 자신의 개발 서버를 계속 띄워두고 보는데, Claude가 검증용으로 3001을 반복해서 껐다 켰다 하면 사용자의 세션이 자꾸 끊긴다(2026-07-17 피드백). `npm run dev -- --port 3002`처럼 CLI 플래그로 오버라이드할 것 - `vite.config.ts`의 `strictPort: true`/기본값 3001 자체는 OAuth 리다이렉트 URI가 그 포트를 전제로 하므로(§3) 건드리지 않는다. 검증이 끝나면 3002 프로세스만 종료하고 사용자의 3001 세션은 절대 건드리지 않는다
 
 ---
 
@@ -1547,5 +1596,58 @@ docker compose -f docker-compose.prod.yml -f docker-compose.monitoring.yml --env
   상관관계)
 - 실제 EC2에서의 전체 스택 기동 검증(리소스 사용량 실측 포함)은 사용자가
   EC2 프로비저닝 후 직접 진행 필요
+
+</details>
+
+<details>
+<summary>2026-07-18 - 현재가 조회 429 반복 재발 원인 진단 및 제거</summary>
+
+**변경 사항**
+- 사용자가 "백엔드 돌린 지 얼마 안 돼서 429(rate-limit-exceeded)가 반복
+  발생한다"고 리포트. 이전 작업기록(두 스케줄러의 Toss 중복 호출을
+  구조적으로 제거한 리팩터링)에도 불구하고, `StockPriceService.
+  getCurrentPrice()`(개별 종목 현재가 조회, Redis 캐시 미스 시
+  fallback)가 여전히 `TossApiClient`를 직접·무페이싱으로 호출하는
+  경로로 남아있던 걸 발견 - 스케줄러 재설계 범위 밖에 있던 서비스
+  계층 코드였음
+- 이 경로는 장이 닫혀 있으면 `MarketPriceSweepScheduler`가 아예 안 돌아
+  Redis가 영원히 안 채워지므로 100% 확률로 발동했고, 프론트가 관심종목/
+  최근 본 종목을 `useStockPricesQuery`로 5초마다 동시 폴링(종목당 1개
+  요청)하는 구조라 매 폴링마다 N개의 무페이싱 Toss 요청이 한꺼번에
+  몰려 토큰 버킷을 넘김. 실제로 백엔드를 재현용으로 띄워 로그를 관찰해
+  확인
+- Toss 재호출 대신 DB에 이미 있는 마지막 확정 종가
+  (`DailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc`)로
+  응답하도록 수정 - `MarketPriceSweepScheduler`를 유일한 Toss 가격
+  조회원으로 실제 일원화. 등락률은 기존처럼 `PreviousCloseCache`로 계산
+
+**변경 파일**
+- `backend/core/.../price/service/StockPriceService.java` - Toss 직접
+  호출 제거, DB 폴백으로 대체
+- `backend/core/.../price/dto/mapper/PriceMapper.java` - `DailyPrice`
+  기반 매핑 오버로드 추가
+- `backend/core/.../price/service/StockPriceServiceTest.java`,
+  `backend/core/.../price/dto/mapper/PriceMapperTest.java`,
+  `backend/api/.../price/controller/PriceControllerTest.java` - Toss
+  목킹 대신 DB 픽스처 기반으로 테스트 재작성
+
+**결정 사항**
+- 이 저장소는 여러 Claude Code 세션이 같은 워킹 디렉터리를 동시에
+  편집하는 구조로 운영되고 있다는 걸 이번 세션에서 실측으로 확인
+  (`CurrentPriceResponse`의 `changeRate` 필드가 작업 도중 다른 세션에
+  의해 실시간으로 추가/제거되는 걸 직접 목격). 커밋 직전 반드시
+  `git diff`로 대상 파일이 여전히 예상한 모양인지 재확인한 뒤 좁은
+  범위로만 `git add`하는 방식으로 대응 - 다음 세션도 이 저장소에서
+  작업할 땐 동일한 위험을 염두에 둘 것
+- 이전 429 완화 작업 이력이 있었지만, 이번 재발은 그 결론이 틀린 게
+  아니라 그 리팩터링의 범위(스케줄러 간 중복)가 서비스 계층의 별도
+  fallback 경로까지는 커버하지 못했던 사각지대였음 - 유사 패턴이 더
+  있는지는 이번 세션에서 전수조사하지 않음
+
+**다음 작업**
+- 다른 서비스에 유사한 "캐시 미스 시 외부 API 직접 호출" fallback
+  패턴이 더 있는지 점검 필요(이번엔 사용자 리포트로 우연히 발견)
+- 저장소 동시 편집 위험은 구조적으로 남아있음 - 여러 세션을 병행
+  운영할 계획이면 세션별 git worktree 분리를 고려할 것
 
 </details>
