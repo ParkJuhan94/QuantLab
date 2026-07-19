@@ -684,23 +684,22 @@ com.quantlab/{feature}/
   "지금 갱신 중"임을 알린다.** 차트 안에 펄스를 찍기보다(일봉처럼
   "진행 중" 개념이 맞지 않는 차트도 있음) 상태 라벨("장중" 등) 옆에
   독립된 작은 점을 붙이는 편이 재사용하기 쉽고 의미도 분명하다.
-- **리퀴드 글래스(반투명 유리) 적용은 "정적 크기 패널 vs 잦은 리사이즈
-  요소"를 먼저 판단하고 시작한다.** 판단 기준·4-layer 구조·Safari 폴백
-  한계·성능 체크 방법은 전역 `~/.claude/CLAUDE.md` "리퀴드 글래스(Liquid
-  Glass) 구현 가이드" 참고(2026-07-19, 이 프로젝트에서 실제로 구현하며
-  확정). quantlab 현재 적용 현황:
-  - **진짜 굴절**(`liquid-glass-refract`, SVG `feDisplacementMap`) - 고정
-    크기 모달인 `GroupNameDialog`/`GroupQuickActionModal`/
-    `WatchlistGroupEditModal`(관심 그룹 관리 모달 3종)
-  - **블러 전용**(`liquid-glass`, 굴절 없음) - `SearchOverlay`(검색 모달).
-    `h-fit`이라 검색 결과 개수에 따라 높이가 계속 바뀌어 굴절을 걸면
-    타이핑할 때마다 필터 리전이 재계산됨 - 정적 패널이 아니라서 다운그레이드
-  - SVG 필터 정의는 `LiquidGlassDefs.tsx`에 앱 루트(`App.tsx`) 한 번만
-    마운트, Safari 조합 버그 판별은 `utils/browserSupport.ts`
-  - 홈 헤더의 검색 트리거 박스(`AppHeader.tsx`)는 아직 미적용 - `AppHeader`가
-    `sticky`가 아니라 일반 문서 흐름에 있어 뒤로 스크롤되는 콘텐츠가 없고,
-    `backdrop-filter`가 블러링할 대상 자체가 없어 적용해도 시각 효과가
-    거의 없음(헤더를 `sticky`로 바꾸는 건 이번 스코프보다 큰 변경이라 보류)
+- **리퀴드 글래스(반투명 유리) 실험은 진행했다가 2026-07-20 최종 피드백으로
+  코드에서는 전부 제거하고 방법론만 문서로 남겼다.** 검색 모달·관심 그룹
+  모달 3종에 먼저 적용(2026-07-19) → 판단 기준(정적 패널 vs 잦은 리사이즈)에
+  따라 안전한 후보 7곳(ColorWidthChip, LoginModal/ProfileMenu,
+  AddToWatchlistGroupPicker, FeedComposeModal/FeedbackModal,
+  IndicatorSettingsModal/IndicatorDetailView)으로 적용 범위를 재조정
+  (2026-07-19~20) → 최종적으로 전부 원복(`bg-white shadow-2xl` 등 원래
+  스타일로 되돌림), `LiquidGlassDefs.tsx`/`utils/browserSupport.ts` 삭제,
+  `index.css`의 `.liquid-glass-refract` 규칙 제거(2026-07-20). "안전한
+  후보"라는 판단이 "반드시 적용해야 한다"는 뜻은 아니었음 - 시각적으로
+  원래 스타일을 선호한다는 게 최종 결론. 판단 기준·4-layer 구조·Safari
+  폴백 한계·성능 체크 방법 등 구현 방법론 자체는 재사용을 위해 전역
+  `~/.claude/CLAUDE.md` "리퀴드 글래스(Liquid Glass) 구현 가이드"에만
+  남겨뒀다 - **이 프로젝트 코드에는 관련 클래스/컴포넌트가 없으니, 다음에
+  다시 요청받으면 그 문서를 참고해 처음부터 구현할 것(과거에 있던 파일
+  경로를 찾지 말 것)**
 
 ---
 
@@ -716,7 +715,24 @@ com.quantlab/{feature}/
 - Vite는 webpack과 달리 Node.js 전역을 자동 폴리필하지 않는다. `sockjs-client`처럼 `global`을 참조하는 라이브러리를 그대로 번들하면 브라우저에서 "global is not defined"로 페이지 전체가 깨진다 - `frontend/vite.config.ts`에 `define: { global: 'globalThis' }` 필요(이 문제는 해당 라이브러리를 실제로 번들에 포함시키는 순간에만 드러나므로, import만 추가하고 아직 렌더 경로에 안 걸린 코드에서는 안 잡힐 수 있음에 주의)
 - SockJS 클라이언트의 XHR 폴백 트랜스포트(`/ws/stocks/info` 핸드셰이크 등)는 기본적으로 `withCredentials: true`로 요청한다. REST API 인증 자체는 쿠키가 아니라 `Authorization` 헤더를 쓰더라도, 백엔드 CORS 설정에 `allowCredentials(true)`가 없으면 오리진이 일치해도 브라우저가 응답을 차단한다(`backend/api/.../auth/config/SecurityConfig.java`). 허용 오리진을 특정 값 하나로 고정해뒀다면(와일드카드 아님) 안전하게 켤 수 있다
 - **디자인(UI)이나 백엔드 로직을 수정할 때, 요청받은 범위를 벗어나 기존 코드의 구조·스타일·네이밍을 임의로 리팩터링하지 않는다.** 세션이 반복되며 관련 없는 기존 코드가 목적 없이 크게 바뀌어버리는 문제가 실제로 있었음(사용자 피드백, 2026-07-13) - 새 기능/수정은 기존 컴포넌트·패턴을 최대한 재사용하고 꼭 필요한 파일만 건드릴 것. "더 낫다"는 이유만으로 관련 없는 파일의 포매팅·순서·네이밍을 바꾸지 말고, 정말 필요한 리팩터링이면 별도로 제안해 승인받은 뒤 진행할 것(끼워넣기 금지). 전역 규칙은 `~/.claude/CLAUDE.md` "기존 코드 변경 범위 원칙" 참고
-- **Claude Code로 로컬 검증을 위해 띄운 백엔드 개발 서버(8080)는 세션(작업) 종료 시 반드시 종료한다.** `nohup ./gradlew :api:bootRun &`로 백그라운드에 띄운 뒤 끄는 걸 잊으면 다음 세션 시작 시 포트가 이미 점유돼 있거나, 옛 코드로 떠 있는 stale JVM이 새 변경사항을 반영 못 한 채 계속 응답하는 문제가 생긴다(2026-07-15 세션에서 실제로 겪음 - `ClassNotFoundException`으로 500 응답, 원인은 이전 세션이 안 끄고 남긴 stale 프로세스였음). 종료는 `pkill -9 -f "QuantLabApplication"` **및** `pkill -9 -f ":api:bootRun"` 둘 다 실행할 것(그레이들 래퍼 프로세스와 실제 스프링 부트 JVM 자식 프로세스가 별도라 하나만 죽이면 나머지가 포트를 계속 물고 있음 - 2026-07-12 작업 기록 참고). 사용자가 "계속 띄워둬" 등으로 명시적으로 요청한 경우는 예외
+- **Claude Code가 로컬 검증을 위해 백엔드를 띄울 땐 기본 8080이 아니라 8081
+  포트를 쓴다(2026-07-20 피드백 - 이전엔 8080에 이미 떠 있는 프로세스를
+  전부 "내가 정리해야 할 stale 프로세스"로 간주하고 죽인 뒤 재시작했는데,
+  그중 일부가 실제로는 사용자가 계속 띄워두고 쓰던 라이브 세션이었을
+  가능성이 있음 - 사용자 3001 프론트 세션을 건드리지 않는 것과 동일한
+  이유로 백엔드도 분리).** `SERVER_PORT=8081 APP_CORS_ALLOWED_ORIGIN=http://localhost:3002
+  nohup ./gradlew :api:bootRun &`처럼 띄우고(Spring Boot는 `SERVER_PORT`
+  환경변수가 `application.yml`의 `server.port: 8080` 하드코딩보다 우선순위가
+  높아 별도 코드 수정 없이 오버라이드된다), 검증용 프론트엔드는
+  `VITE_API_BASE_URL=http://localhost:8081 npm run dev -- --port 3002`로
+  띄워 이 8081 백엔드를 바라보게 한다(`frontend/src/config/env.ts` 기본값이
+  `http://localhost:8080`이라 반드시 오버라이드해야 함). **종료는 절대
+  `pkill -f "QuantLabApplication"`처럼 프로세스명 패턴을 쓰지 않는다** -
+  이 패턴은 포트를 구분하지 않아 사용자의 8080 세션이 실행 중이면 그것까지
+  함께 죽일 수 있다. 대신 `lsof -ti:8081 | xargs -r kill -9`로 8081에
+  바인딩된 PID만 정확히 찾아서 종료할 것(전역 `~/.claude/CLAUDE.md` "로컬
+  개발 서버 종료 원칙" 참고). 사용자가 "8080 써도 돼"처럼 명시적으로
+  허용한 경우만 예외
 - **Claude Code가 로컬 검증을 위해 프론트엔드 개발 서버를 띄울 땐 기본 3001이 아니라 3002 포트를 쓴다.** 사용자가 로컬에서 3001번으로 자신의 개발 서버를 계속 띄워두고 보는데, Claude가 검증용으로 3001을 반복해서 껐다 켰다 하면 사용자의 세션이 자꾸 끊긴다(2026-07-17 피드백). `npm run dev -- --port 3002`처럼 CLI 플래그로 오버라이드할 것 - `vite.config.ts`의 `strictPort: true`/기본값 3001 자체는 OAuth 리다이렉트 URI가 그 포트를 전제로 하므로(§3) 건드리지 않는다. 검증이 끝나면 3002 프로세스만 종료하고 사용자의 3001 세션은 절대 건드리지 않는다
 
 ---
