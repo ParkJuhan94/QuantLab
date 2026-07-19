@@ -1799,3 +1799,56 @@ BACKTEST_METHODOLOGY_REVIEW.md`, gitignore 처리), 그 권고를 실제 계획
   이번 세션 범위 밖 - 손대지 않음
 
 </details>
+
+<details>
+<summary>2026-07-20 - 홈 랭킹 테이블 UX 다듬기 + 리퀴드 글래스 실험(적용→원복) + 로컬 검증 포트 격리 원칙 확립</summary>
+
+**변경 사항**
+- 검색 모달 결과 목록에 ↑↓ 방향키 탐색 + Enter로 하이라이트된 항목 선택 구현
+- 애플 iOS 26 "리퀴드 글래스" 디자인 실험: 검색모달/관심그룹 모달 3종에
+  블러 기반으로 먼저 적용 → 사용자 요청으로 SVG feDisplacementMap 기반
+  "진짜 굴절" 버전으로 고도화(판단 프레임워크를 글로벌 CLAUDE.md에 문서화)
+  → 안전한 정적 패널 7곳(ColorWidthChip, LoginModal, ProfileMenu,
+  AddToWatchlistGroupPicker, FeedComposeModal, FeedbackModal,
+  IndicatorSettingsModal)로 적용 범위 재조정 → **최종적으로 사용자가
+  시각적 선호로 전체 원복 요청** → 코드에서 완전히 제거하고 방법론만
+  문서로 남김
+- 종목 상세 페이지 관심종목 하트를 이름 줄 안에서 헤더 섹션 최우측(스코어
+  카드 옆)으로 재배치
+- 홈 실시간 랭킹 테이블: "관심종목만" 필터를 스코어/거래대금/급상승/
+  급하락 4탭 전부에 통일, 텍스트 버튼→하트 아이콘 온오프 토글로 교체하고
+  실시간 기간 드롭다운 왼쪽으로 이동, 산업명이 길 때 표 레이아웃이
+  밀리던 문제를 max-width 캡+말줄임+title 툴팁으로 수정
+- 차트 지표 설정 색상/굵기 바텀시트의 "굵기"/"선종류"를 세로 스택에서
+  좌우 2칼럼으로 병합
+- 로컬 검증용 백엔드 포트를 8080에서 8081로 분리(사용자가 8080에 자신의
+  라이브 세션을 띄워둘 수 있음) - `SERVER_PORT`/`VITE_API_BASE_URL`
+  환경변수 오버라이드로 실제 동작 검증, 종료도 프로세스명 패턴(`pkill -f`)
+  대신 포트 바인딩 조회(`lsof -ti:PORT`)로 전환 - 같은 이름의 다른 포트
+  인스턴스를 실수로 같이 죽이는 것 방지
+
+**변경 파일**
+- 이번 세션 변경은 이미 다른 세션이 묶은 대형 커밋 2개(`5e43515`,
+  `e97da74`)에 함께 포함되어 있음 - 이 세션이 직접 커밋한 것은 없음
+  (`git log -S` 대조로 확인)
+- 주요 파일: `frontend/src/pages/StockDetailPage.tsx`,
+  `frontend/src/components/home/RankingTable.tsx`,
+  `frontend/src/components/chart/ColorWidthChip.tsx`,
+  `frontend/src/components/search/SearchOverlay.tsx`,
+  `frontend/src/index.css`, 전역/프로젝트 `CLAUDE.md`
+
+**결정 사항**
+- 리퀴드 글래스는 "정적 크기 패널 vs 잦은 리사이즈 요소" 판단
+  프레임워크로 적용 범위를 좁혔지만, 최종적으로는 사용자가 시각적
+  선호로 전부 원복을 선택 - "안전한 후보"라는 판단이 "반드시 적용해야
+  함"을 뜻하지는 않음을 재확인
+- 로컬 개발 서버 포트를 사용자 기본값과 분리하는 원칙을 프론트
+  (3001→3002)에 이어 백엔드(8080→8081)까지 확장 - 종료 명령도 프로세스명
+  패턴에서 포트 기반 조회로 전환(다른 세션/사용자의 동일 프로세스명
+  인스턴스를 실수로 같이 죽이는 위험 제거)
+
+**다음 작업**
+- 없음(이 세션 범위 내). 멀티세션 동시편집 리스크는 기존 CLAUDE.md에
+  이미 기록됨(중복 기록 안 함)
+
+</details>
