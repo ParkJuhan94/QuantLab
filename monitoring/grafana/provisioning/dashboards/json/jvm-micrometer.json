@@ -1,7 +1,7 @@
 {
-  "uid": "quantlab-jvm",
+  "uid": "quantlime-jvm",
   "title": "QuantLab - JVM (Micrometer)",
-  "tags": ["quantlab", "jvm"],
+  "tags": ["quantlime", "jvm"],
   "timezone": "Asia/Seoul",
   "schemaVersion": 39,
   "version": 1,
