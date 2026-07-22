@@ -1153,3 +1153,73 @@ BACKTEST_METHODOLOGY_REVIEW.md`, gitignore 처리), 그 권고를 실제 계획
 - Docker 있는 환경에서 `SubscriptionControllerTest` 통합 테스트 실행 확인
 
 </details>
+
+<details>
+<summary>2026-07-19~20 - CD 파이프라인 정상화 + 최초 전체 자동배포 + 운영 DB 데이터 이관</summary>
+
+**변경 사항**
+- **[가장 중요] main이 2일간(2026-07-18~19) CI 빨간불로 방치돼 있던 것 발견·수정**
+  - 원인: 커밋된 코드(`FredApiConfig`, `BenchmarkIndexBackfillService`)가
+    실제로는 `git add`된 적 없는 클래스(`FredApiProperties`, `infra/naver`
+    패키지 11개 파일)를 참조 - 로컬엔 파일이 있어 아무도 못 알아챔
+  - import 추적으로 정확히 필요한 파일만(다른 세션의 무관한 진행 중 작업은
+    안 건드리고) 찾아 완성 - 로컬 `compileJava` 통과 후 push했는데도 CI에서
+    또 다른 3번째 미완성 커밋(`ScoreMapper`/`PriceMapper`가 기대하는
+    `sector`/`changeRate` 필드가 실제 레코드엔 없음)이 드러남 - 로컬
+    작업트리엔 다른 세션의 미커밋 변경이 섞여있어 "로컬 컴파일 성공"이
+    클린 체크아웃 검증이 아니었다는 걸 직접 겪음
+- CloudWatch/IAM 인스턴스 역할/SNS 알람 코드·문서 전부 제거, 이미 있던
+  PLG(Prometheus/Grafana/Alertmanager) 스택으로 모니터링 일원화.
+  `.github/workflows/deploy.yml` → `cd.yml` 리네임(`ci.yml`과 통일)
+- 여러 세션에 걸쳐 쌓여있던 미커밋 파일 203개(관심종목 그룹, 피드/피드백,
+  마이페이지, 쿠키 기반 리프레시 토큰, 전종목 스코어 랭킹, 시장 데이터
+  확장 등)를 기능 단위 10개 커밋으로 정리 - 백엔드 전체 테스트/프론트
+  tsc+build+lint/quant-engine pytest 통과 확인 후 push
+- **처음으로 CD 파이프라인 전체(이미지 3종 빌드+푸시 → EC2 SSH 자동배포) 성공**
+- 실서버 브라우저 콘솔에서 로그인 버튼 클릭 시 `crypto.randomUUID is not
+  a function` 발견 - HTTPS 미적용 배포라 보안 컨텍스트 전용 API가
+  없어서 나는 에러. `crypto.getRandomValues()` 기반으로 OAuth state
+  생성을 교체(암호학적 강도 동일, HTTP에서도 동작)
+- 토스증권 오픈API가 403 `IP address not allowed`로 거부 - 자격증명이
+  아니라 **클라이언트 앱에 등록된 IP 허용목록** 때문이었음(새로 발견된
+  배포 전제조건, EC2 Elastic IP를 토스 개발자센터에 등록해야 함)
+- 로컬 DB(시장 데이터 위주로 오래 축적)를 EC2로 이관 - EC2에 이미 실제
+  가입 유저 3명이 있는 걸 먼저 확인하고, 전체 덮어쓰기 대신
+  `stock`/`daily_price`/`benchmark_index`/`overseas_daily_price` 4개
+  테이블만 선별 이관(users/watchlist/score는 손대지 않음). 반입 전 EC2
+  전체 mysqldump 백업 선행
+
+**변경 파일**
+- `.github/workflows/{deploy→cd}.yml`, `docker-compose.cloudwatch.yml`(삭제),
+  `scripts/report-health-metric.sh`(삭제), `docs/DEPLOYMENT.md`(§ 재구성)
+- `backend/core/.../infra/naver/**`(신규 11개 파일), `FredApiConfig.java`(삭제)
+- `frontend/src/config/oauth.ts` - `generateRandomState()`로 교체
+- 기능 단위 10개 커밋(관심종목그룹/피드·피드백/마이페이지/인증/시장데이터/
+  스코어·가격/인프라) - 커밋 해시는 `git log` 참고
+
+**결정 사항**
+- EC2 디스크 부족(8GB) 해결은 수평 확장(서비스별 다중 EC2)이 아니라
+  수직 확장(t3.medium + EBS 20~30GB)으로 결정 - 코드 조사 결과 서비스
+  간 배선이 Docker Compose 내장 DNS(서비스명 호스트명)에 의존해 호스트
+  분리 시 재배선이 필요했고, 애초에 "디스크 부족"이라는 문제 자체에
+  수평 확장은 해법이 아니었음(사용자가 비용 허용도·단일 EC2 유지 의사
+  확인 후 결정)
+- DB 이관은 전체 덮어쓰기가 아니라 테이블 단위로 범위를 좁힘 - EC2에
+  이미 실사용자가 존재한다는 걸 먼저 확인하지 않았다면 되돌릴 수 없는
+  실데이터 손실로 이어졌을 것
+
+**다음 작업**
+- **[최우선] quantlab→quantlime 리네이밍이 이 세션에서 만든 EC2 인스턴스/
+  GitHub Actions Secrets/GHCR 이미지 경로(`ghcr.io/parkjuhan94/quantlab-*`)/
+  컨테이너명(`quantlab-prod-*`)에도 반영됐는지 전혀 미검증 - 다음 세션이
+  가장 먼저 확인해야 함. 반영 안 됐다면 시크릿/이미지 경로/docker-compose
+  프로젝트명 등을 quantlime 기준으로 다시 맞춰야 할 수 있음**
+- AWS 계정 전환(프리티어 만료 대응) - 방법론만 안내, 실행은 사용자의
+  새 계정 준비 이후로 보류된 상태
+- 토스 API "IP 허용목록 필요" 사실을 `docs/DEPLOYMENT.md`/CLAUDE.md §4에
+  아직 문서화 안 함
+- EC2 디스크 확장(EBS 볼륨+인스턴스 타입 승급) 실제 실행 여부 미확인 -
+  플랜만 세워둠(`~/.claude/plans/harmonic-weaving-lollipop.md` 참고,
+  이름 무관하게 내용은 이 이슈용)
+
+</details>
