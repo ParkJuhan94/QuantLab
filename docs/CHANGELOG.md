@@ -1,4 +1,4 @@
-# QuantLime — 작업 기록 (세션별 변경 히스토리)
+# QuantLab — 작업 기록 (세션별 변경 히스토리)
 
 > `CLAUDE.md`에서 분리된 문서(2026-07-20). 세션이 쌓일수록 무한정
 > 늘어나는 히스토리라, 참조 문서(구조/컨벤션/현재 Phase 현황)와 분리해
@@ -83,7 +83,7 @@
 - `docs/DEPLOYMENT.md`(신규), `CLAUDE.md` Phase 6 — 문서
 
 **결정 사항**
-- `docker-compose.prod.yml`에 `name: quantlime-prod`를 명시해 dev용
+- `docker-compose.prod.yml`에 `name: quantlab-prod`를 명시해 dev용
   compose와 프로젝트명(컨테이너·볼륨)을 분리 - 로컬 검증 중 실제로
   겹치는 것을 발견하고 나서 수정(Phase 6 섹션에 상세 기록)
 - 컨테이너 시크릿은 `.env.prod`(gitignore) 하나로 통일하고, compose
@@ -177,9 +177,9 @@
   (구글은 애초에 이름/닉네임이 분리된 필드가 아니라 되돌릴 대상이 없었음)
 
 **변경 파일**
-- `backend/core/src/main/java/com/quantlime/infra/oauth/NaverOAuthClient.java` - `DEFAULT_NICKNAME` fallback 추가
-- `backend/core/src/main/java/com/quantlime/infra/oauth/KakaoOAuthClient.java` - null 체크 → `StringUtils.hasText` 강화
-- `backend/core/src/test/java/com/quantlime/infra/oauth/{Kakao,Naver}OAuthClientTest.java` - fallback 검증 테스트 추가
+- `backend/core/src/main/java/com/quantlab/infra/oauth/NaverOAuthClient.java` - `DEFAULT_NICKNAME` fallback 추가
+- `backend/core/src/main/java/com/quantlab/infra/oauth/KakaoOAuthClient.java` - null 체크 → `StringUtils.hasText` 강화
+- `backend/core/src/test/java/com/quantlab/infra/oauth/{Kakao,Naver}OAuthClientTest.java` - fallback 검증 테스트 추가
 
 **결정 사항**
 - 카카오/네이버의 "닉네임" 동의 항목은 콘솔에서 필수 동의로 바꾸면 항상
@@ -216,8 +216,8 @@
   글자 원형 placeholder로 조용히 대체
 
 **변경 파일**
-- `backend/core/src/main/java/com/quantlime/stock/dto/response/StockDetailResponse.java` - `logoUrl` 필드 추가
-- `backend/core/src/main/java/com/quantlime/stock/dto/mapper/StockMapper.java` - 종목 코드 기반 로고 URL 생성
+- `backend/core/src/main/java/com/quantlab/stock/dto/response/StockDetailResponse.java` - `logoUrl` 필드 추가
+- `backend/core/src/main/java/com/quantlab/stock/dto/mapper/StockMapper.java` - 종목 코드 기반 로고 URL 생성
 - `frontend/src/types/stock.ts` - `logoUrl` 타입 반영
 - `frontend/src/components/common/StockLogo.tsx`(신규) - 로드 실패 폴백 포함 공용 로고 컴포넌트
 - `frontend/src/components/search/SearchResultItem.tsx`, `frontend/src/pages/StockDetailPage.tsx` - 로고 적용
@@ -246,10 +246,10 @@
 </details>
 
 <details>
-<summary>2026-07-12 - 홈 화면 리디자인(claude.ai/design 시안 "QuantLime 토스증권 UI 리디자인" 반영)</summary>
+<summary>2026-07-12 - 홈 화면 리디자인(claude.ai/design 시안 "Quantlab 토스증권 UI 리디자인" 반영)</summary>
 
 **변경 사항**
-- claude.ai/design 프로젝트에서 가져온 시안(`Quantlime Screener.dc.html`,
+- claude.ai/design 프로젝트에서 가져온 시안(`Quantlab Screener.dc.html`,
   turn t3/옵션 2c "홈")을 기준으로 `/`(기존 `WatchlistPage`)를 새
   `HomePage`로 교체 - 검색 오버레이, 주요 지수 위젯, 실시간 시세
   랭킹 테이블, 접이식 우측 패널(관심/최근 본/실시간 탭)로 구성.
@@ -302,7 +302,7 @@
   구조 변경이 필요해지므로, 이번 범위(홈 화면 UI) 밖의 결정으로 보고
   현행 유지
 - 실시간 랭킹 테이블에 있던 "해외" 스코프 필터·통화($/원) 토글은
-  구현하지 않음 - QuantLime은 "국내 주식 한정"(§1)이 제품 범위이고
+  구현하지 않음 - QuantLab은 "국내 주식 한정"(§1)이 제품 범위이고
   시안의 해외종목 예시는 이 제품엔 애초에 해당하지 않는 개념이라
   판단. 다만 나스닥/S&P500 등 해외 지수 "위젯"은 `docs/ROADMAP.md` #1이
   이미 정보성 표시로 계획하고 있어 그대로 유지
@@ -410,12 +410,12 @@
   되는 게 아니라 복잡도만 늘어난다고 판단
 - 검증 도중 발견: 이전 세션에서 `pkill -f ":api:bootRun"`으로 백엔드를
   껐다고 여겼으나, 그 패턴은 그레이들 래퍼 프로세스만 매치하고 실제
-  포그라운드로 남는 스프링 부트 JVM 자식 프로세스(`com.quantlime.
-  QuantLimeApplication`)는 매치하지 못해 살아있었음 - 이번 세션 초반
+  포그라운드로 남는 스프링 부트 JVM 자식 프로세스(`com.quantlab.
+  QuantLabApplication`)는 매치하지 못해 살아있었음 - 이번 세션 초반
   `/api/market/**` permitAll 반영 전 코드로 계속 떠 있던 그 프로세스가
   새 bootRun의 포트 바인딩을 막아 401이 나온 것으로 원인 파악 후 PID로
   직접 kill해서 해결. 앞으로 bootRun을 내릴 땐 프로세스명
-  (`QuantLimeApplication`)까지 같이 pkill할 것
+  (`QuantLabApplication`)까지 같이 pkill할 것
 - Testcontainers 기반 통합 테스트(`MarketControllerTest` 포함)는 이
   로컬 환경에서 "Could not find a valid Docker environment"로 전부
   실패함을 확인(기존 `PriceControllerTest`도 동일하게 실패해 내
@@ -575,8 +575,8 @@
   API 변경 여부를 더 넓게 검토해야 해 이번 스코프를 벗어난다고 판단
 
 **검증**
-- `./gradlew :api:test --tests 'com.quantlime.market.controller.
-  MarketControllerTest' --tests 'com.quantlime.price.controller.
+- `./gradlew :api:test --tests 'com.quantlab.market.controller.
+  MarketControllerTest' --tests 'com.quantlab.price.controller.
   PriceControllerTest'` - 11개 전부 통과(수정 전엔 11개 전부 실패)
 - `./gradlew :api:test :core:test` - 전체 스위트 회귀 없이 통과
 
@@ -632,7 +632,7 @@
 - `backend/core/.../infra/toss/TossApiClient.java` - `withTokenRetry` 헬퍼로
   4개 메서드(`getDailyCandles`/`getCurrentPrices`/`getExchangeRate`/
   `getMarketCalendar`) 전부 401 감지 시 1회 재시도하도록 통일
-- `backend/core/src/test/java/com/quantlime/infra/toss/{TossApiClientTest,
+- `backend/core/src/test/java/com/quantlab/infra/toss/{TossApiClientTest,
   TossTokenManagerTest}.java`(신규) - 401 재시도 성공/재시도도 실패/429는
   무효화 안 함 3케이스 + 토큰 캐시 히트/미스/invalidateToken 3케이스
 
@@ -740,7 +740,7 @@
 <summary>2026-07-16 - 관측성 스택 신설(Prometheus/Grafana/Alertmanager, Phase 1: 메트릭+대시보드+알림)</summary>
 
 **변경 사항**
-- 지금까지 quantlime의 관측성은 호스트 레벨(얕은 `/api/health`, cron이
+- 지금까지 QuantLab의 관측성은 호스트 레벨(얕은 `/api/health`, cron이
   CloudWatch로 보내는 헬스/메모리/디스크 3개 지표)뿐이었고 **앱 내부는
   완전히 깜깜했음** - Actuator/Micrometer가 전무해 JVM 상태, HTTP
   지연/에러율은 물론, 바로 하루 전(2026-07-15/16) 재설계한 Toss
@@ -783,7 +783,7 @@
 - **모니터링 스택**: `docker-compose.monitoring.yml` 신규(기존
   `docker-compose.cloudwatch.yml` 분리 패턴을 그대로 미러링) - Prometheus,
   Alertmanager, node-exporter, cAdvisor, Grafana(대시보드 3종: JVM,
-  Spring Boot HTTP, quantlime 비즈니스 지표 - `monitoring/grafana/`에
+  Spring Boot HTTP, QuantLab 비즈니스 지표 - `monitoring/grafana/`에
   프로비저닝 JSON으로 커밋해 최초 기동 시 자동 로드). cloudwatch
   오버레이와의 결정적 차이: **AWS 자격증명이 필요 없어 로컬에서도 실제
   `up`까지 기동·검증 가능**(로컬 Grafana 3000/프론트 3001과 안 겹치게
@@ -791,7 +791,7 @@
   - 알림 규칙은 `monitoring/prometheus/rules/alerts.yml`에 코드로:
     BackendDown/QuantEngineDown/HighHttp5xxRate/TossRateLimitSpike/
     QuantEngineFailureRate/JvmHeapHigh/HostMemoryHigh/HostDiskHigh 8종
-  - Alertmanager → Slack `#quantlime-alerts`(기존 사용자 피드백용 Incoming
+  - Alertmanager → Slack `#quantlab-alerts`(기존 사용자 피드백용 Incoming
     Webhook과 별개 채널로 분리 등록 권장, `.env.prod.example`의
     `SLACK_ALERT_WEBHOOK_URL`)
 - **버그 발견 + 수정(로컬 실제 기동 검증 중)**: Alertmanager 설정 파일은
@@ -1074,5 +1074,82 @@ BACKTEST_METHODOLOGY_REVIEW.md`, gitignore 처리), 그 권고를 실제 계획
 **다음 작업**
 - 없음(이 세션 범위 내). 멀티세션 동시편집 리스크는 기존 CLAUDE.md에
   이미 기록됨(중복 기록 안 함)
+
+</details>
+
+<details>
+<summary>2026-07-22 - 프리미엄 구독 결제 기능 신규 구현(토스페이먼츠, 사업자등록 전 - 테스트 키 전용)</summary>
+
+**배경**
+사업자등록이 아직 안 된 상태에서 프리미엄 구독 결제 기능을 미리
+구현해달라는 요청. 실결제는 불가능하지만, 토스페이먼츠는 개발자센터
+이메일 가입만으로 테스트 키를 즉시 발급하므로 테스트 키로 전체 플로우를
+지금 구현해두고, 사업자등록 완료 후 `.env`의 키만 라이브 키로 교체하면
+되도록 설계. 결제 방식은 자동결제(빌링키)만 지원하기로 확정 - 토스페이먼츠
+빌링 API가 카드에만 적용되는 기술적 제약이 있어 결제수단은 카드로
+고정되고(휴대폰·카카오페이·네이버페이 등은 애초에 빌링키 발급 대상이
+아님), 대신 장기 플랜(6/12개월) 결제 시 카드사 할부(`cardInstallmentPlan`
+파라미터, 자동결제 승인 API에도 지원됨을 문서로 확인)를 붙여 목돈 부담을
+줄이는 쪽으로 방향을 잡았다.
+
+**변경 사항**
+- 백엔드: `subscription`(SubscriptionPlan/Subscription 도메인 - 사용자당
+  row 1건, 갱신마다 상태 전이) + `payment`(청구 시도 이력) 신규 도메인
+  패키지. 기존 `watchlist` 도메인 구조(entity/repository/service/dto/exception)
+  를 그대로 따름
+- `infra/tosspayments` 외부 클라이언트 신규(`infra/toss`의
+  ExternalApiInvoker/에러코드 패턴 재사용, 시크릿키 Basic Auth라 토큰
+  관리자는 불필요) - 빌링키 발급/청구, 웹훅 서명 검증(HMAC-SHA256,
+  정확한 헤더명은 문서 접근 불가로 이번 세션에 확정 못함 - 실제 연동
+  시 재확인 필요)
+- 빌링키(카드 자동결제 권한 토큰) DB 컬럼은 AES-GCM으로 암호화
+  (`BillingKeyConverter`) - 암호화 키 미설정 시(로컬 개발) 평문 통과,
+  운영 배포 전 `SUBSCRIPTION_BILLING_KEY_ENCRYPTION_KEY` 필수
+  (`openssl rand -base64 32`로 생성)
+  - 트랜잭션 경계 이슈 발견: `PaymentService`에서 결제 승인(외부 API,
+    트랜잭션 밖) 후 DB 저장을 같은 클래스의 `@Transactional` 메서드로
+    self-invocation하면 Spring AOP 프록시를 안 거쳐 트랜잭션이 무시됨
+    (Phase 3 `ScorePersistenceService` 분리 때와 동일한 원인) - 저장
+    책임을 `SubscriptionService.activateOrResubscribe`로 분리해 해결
+  - 자동 갱신 재시도(`SubscriptionRenewalScheduler`, 매일 04:00): 실패
+    시 `nextBillingAt`을 +1일로 미뤄 재시도 예약, 3회 소진 시 PAST_DUE
+    전환(재시도를 스케줄하지 않으면 exact-equality 쿼리 특성상 다음날
+    조회에서 아예 안 잡혀 재시도가 안 되는 문제를 미리 발견해 반영)
+- 요금제 3개월/6개월/12개월(월 기준가 7,900원, 할인 없이 시딩) -
+  `SubscriptionPlanInitializer`(`StockMasterInitializer`와 동일한
+  ApplicationRunner 시딩 패턴, Flyway 없이 ddl-auto=update만 쓰는
+  프로젝트라 그대로 재사용)
+- API: `GET /api/subscription/plans`, `GET /api/subscription/me`
+  (customerKey 포함 - 프론트가 카드 등록 위젯을 열기 전에 필요),
+  `POST /api/subscription/billing-key`(빌링키 발급+즉시 첫결제 한 번에),
+  `POST /api/subscription/cancel`(자동갱신만 해제, 현재 주기 끝까지는
+  이용 가능), `GET /api/subscription/payments`, `POST
+  /api/webhooks/tosspayments`(서명 검증으로 인증 대체, SecurityConfig
+  permitAll 추가)
+- 프론트: `@tosspayments/tosspayments-sdk`(v2, 카드 자동결제 위젯) 도입,
+  `/subscribe`(플랜+할부 선택, 카드 등록 위젯 호출) · `/subscribe/result`
+  (successUrl/failUrl 콜백 - 위젯이 붙여주는 authKey/customerKey 쿼리
+  파라미터로 빌링키 발급 API 호출) 신규 페이지, `MyInfoPage`에 구독
+  상태/결제 이력 섹션 추가, `ProfileMenu`에 "구독 관리" 진입점 추가
+- 테스트: `SubscriptionServiceTest`/`PaymentServiceTest`(Mockito 단위),
+  `TossPaymentsApiClientTest`(MockRestServiceServer, 기존
+  `TossApiClientTest` 패턴), `SubscriptionControllerTest`(통합,
+  `@MockBean TossPaymentsApiClient`로 실제 토스 호출 격리) - 이 세션
+  환경엔 Docker가 없어 통합 테스트는 컴파일만 확인, 실행은 로컬에서
+  필요
+
+**결정 사항**
+- 프리미엄 혜택(관심종목 개수 제한 등 실제 기능 게이팅)은 이번 범위에서
+  보류 - `Subscription.status`로 프리미엄 여부를 판별할 수 있는 구조만
+  만들어두고, 어떤 기능을 잠글지는 별도 요청 때 진행하기로 함(사용자 확인)
+- `User` 엔티티에 plan/tier 필드를 추가하지 않음 - 프리미엄 여부가
+  `Subscription.status == ACTIVE`로 충분히 판별되므로 불필요한 컬럼 추가
+  회피
+
+**다음 작업**
+- 사업자등록 완료 후 토스페이먼츠 라이브 키로 교체 + 웹훅 헤더명 실제
+  연동 시 재확인
+- 프리미엄 게이팅 대상 기능 결정 및 구현(별도 요청 시)
+- Docker 있는 환경에서 `SubscriptionControllerTest` 통합 테스트 실행 확인
 
 </details>
